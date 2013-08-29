@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body {
+  font: 10px sans-serif;
+}
+h2 {
+	margin-top: 5px;
+	margin-bottom: 3px;
+}
+.label {
+  font-weight: bold;
+}
+
+.tile {
+  shape-rendering: crispEdges;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+
+</style>
+<body>
+<script src="http://d3js.org/d3.v2.js?2.9.6"></script>
+<table>
+	<tr>
+		<td align="right"><div id="fixed" style="width: 250px; height: 60px; float: left; padding-left: 50px"><div class="sparkline"></div></div><img src="thumb_up.png" style="width:auto; height:auto;vertical-align: middle;" /><span style="font-size: 14px; font-weight: bold; font-style: italic;">Predicted to be Fixed</span></td>
+		<td align="right"><div id="reopened" style="width: 250px; height: 60px; float: left; padding-left: 50px"><div class="sparkline"></div></div><img src="thumb_down.png" style="width:auto; height:auto;vertical-align: middle;" /><span style="font-size: 14px; font-weight: bold; font-style: italic;">Predicted to be Reopen</span></td>
+	</tr>
+	<tr>
+		<td style="border-bottom: thin solid #080; padding: 5px; margin: 2px; " colspan="2"></td>
+	</tr>
+	<tr>
+		<td align="center">
+		<div id="hotPatatoe">
+			<h2>Hot Patatoe</h2>
+			<div class="chart"></div>
+		</div>
+		</td>
+		
+		<td align="center">
+		<div id="closeReopen">
+			<h2>Close Reopen</h2>
+			<div class="chart"></div>
+		</div>
+		</td>
+	</tr>
+	<tr>
+		<td align="center">
+		<div id="zombie">
+			<h2>Zombies</h2>
+			<div class="chart"></div>
+		</div>
+		</td>
+		
+		<td align="center">
+		<div id="inboxBattle">
+			<h2>Loosing the Battle of the Inboxes</h2>
+			<div class="chart"></div>
+		</div>
+		</td>
+	</tr>
+	
+</table>
+
+
+
+<script language="JavaScript">
+drawRadiogram('zombie','data1.csv');
+drawRadiogram('inboxBattle','data2.csv');
+drawRadiogram('hotPatatoe','data3.csv');
+drawRadiogram('closeReopen','data4.csv');
+
+
+var fixed = [1,2,3,4,3,4,5,4,5,6,,5,6,7,6,6,6,6,6,6,7,8,8];
+var reopened= [8,8,8,7,7,5,6,4,5,3,3,2,2,2,2,5,4,3,2,1,1,1];
+drawsparcline('fixed',reopened);
+drawsparcline('reopened',fixed);
+function drawsparcline(placeholder,data){
+	// create an SVG element inside the #graph div that fills 100% of the div
+		var graph = d3.select("#"+placeholder+' .sparkline').append("svg").attr("width","200").attr("height","60");
+
+		// X scale will fit values from 0-10 within pixels 0-100
+		var x = d3.scale.linear().domain([0, 8]).range([0, 200]);
+		// Y scale will fit values from 0-10 within pixels 0-100
+		var y = d3.scale.linear().domain([0, 8]).range([0, 60]);
+
+		// create a line object that represents the SVN line we're creating
+		var line = d3.svg.line()
+			.x(function(d,i) { 
+				return x(i); 
+			})
+			.y(function(d) { 
+				return y(d); 
+			});
+
+		return	graph.append("path")
+						.attr("d", line(data))
+						.attr("stroke","steelblue")
+						.attr("stroke-width", "1")
+						.attr("fill", "none");
+		 
+		 
+}
+
+
+
+
+function drawRadiogram(name,datafile){
+var margin = {top: 20, right: 20, bottom: 20, left: 50},
+    width = 500 - margin.left - margin.right,
+    height = 400 - margin.top - margin.bottom;
+
+var parseDate = d3.time.format("%Y-%m-%d").parse,
+    formatDate = d3.time.format("%b %d");
+
+var x = d3.time.scale().range([0, width]),
+    y = d3.scale.ordinal().rangeRoundBands([0, height], .4)
+    z = d3.scale.linear().range(["white", "gray"]);
+
+// The size of the buckets in the CSV data file.
+// This could be inferred from the data if it weren't sparse.
+var xStep = 864e5,
+    yStep = 100;
+
+var svg = d3.select("#"+name+" .chart").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+d3.csv(datafile, function(buckets) {
+
+  // Coerce the CSV data to the appropriate types.
+  buckets.forEach(function(d) {
+    d.date = parseDate(d.date);
+    d.bucket =""+d.bucket;
+    d.count =+d.count;
+  });
+
+  // Compute the scale domains.
+  x.domain(d3.extent(buckets, function(d) { return d.date; }));
+  y.domain(buckets.map(function(d) { return d.bucket; }));
+  z.domain([0, d3.max(buckets, function(d) { return d.count; })]);
+
+  // Extend the x- and y-domain to fit the last bucket.
+  // For example, the y-bucket 3200 corresponds to values [3200, 3300].
+  x.domain([x.domain()[0], +x.domain()[1] + xStep]);
+ 
+ 
+ 
+ var brush = d3.svg.brush()
+      .on("brushstart", brushstart)
+      .on("brush", brush)
+      .on("brushend", brushend);
+
+  // Display the tiles for each non-zero bucket.
+  // See http://bl.ocks.org/3074470 for an alternative implementation.
+  var tile=svg.selectAll(".tile")
+      .data(buckets)
+    .enter().append("rect")
+      .attr("class", "tile")
+      .attr("x", function(d) { return x(d.date); })
+      .attr("y", function(d) { return y(d.bucket); })
+      .attr("width", x(xStep) - x(0))
+      .attr("height",  30)
+      .style("fill", function(d) { return z(d.count); });
+  
+  
+  // tile.call(brush.x(x).y(y));
+  
+  // Add a legend for the color values.
+/*
+  var legend = svg.selectAll(".legend")
+      .data(z.ticks(6).slice(1).reverse())
+    .enter().append("g")
+      .attr("class", "legend")
+      .attr("transform", function(d, i) { return "translate(" + (width + 20) + "," + (20 + i * 20) + ")"; });
+
+  legend.append("rect")
+      .attr("width", 20)
+      .attr("height", 20)
+      .style("fill", z);
+
+  legend.append("text")
+      .attr("x", 26)
+      .attr("y", 10)
+      .attr("dy", ".35em")
+      .text(String);
+
+  svg.append("text")
+      .attr("class", "label")
+      .attr("x", width + 20)
+      .attr("y", 10)
+      .attr("dy", ".35em")
+      .text("# bugs");
+*/
+
+  // Add an x-axis with label.
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(d3.svg.axis().scale(x).ticks(d3.time.days).tickFormat(formatDate).orient("bottom"))
+    .append("text")
+      .attr("class", "label")
+      .attr("x", width)
+      .attr("y", -6)
+      .attr("text-anchor", "end")
+      .text("Date");
+
+  // Add a y-axis with label.
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(d3.svg.axis().scale(y).orient("left"))
+    .append("text")
+      .attr("class", "label")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .attr("text-anchor", "end")
+      .attr("transform", "rotate(-90)")
+      .text("Users");
+});
+}
+
+
+// Clear the previously-active brush, if any.
+  function brushstart(p) {
+    if (brush.data !== p) {
+      cell.call(brush.clear());
+      brush.x(x[p.x]).y(y[p.y]).data = p;
+    }
+  }
+
+  // Highlight the selected circles.
+  function brush(p) {
+    var e = brush.extent();
+    svg.selectAll(".cell circle").attr("class", function(d) {
+      return e[0][0] <= d[p.x] && d[p.x] <= e[1][0]
+          && e[0][1] <= d[p.y] && d[p.y] <= e[1][1]
+          ? d.species : null;
+    });
+  }
+
+  // If the brush is empty, select all circles.
+  function brushend() {
+    if (brush.empty()) svg.selectAll(".cell circle").attr("class", function(d) {
+      return d.species;
+    });
+  }
+
+</script>
+
+</body>
